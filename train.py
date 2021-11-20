@@ -22,6 +22,8 @@ from models.pfld import PFLDInference, AuxiliaryNet
 from pfld.loss import PFLDLoss
 from pfld.utils import AverageMeter
 
+from tqdm import tqdm
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
@@ -50,7 +52,8 @@ def train(train_loader, pfld_backbone, auxiliarynet, criterion, optimizer,
     losses = AverageMeter()
 
     weighted_loss, loss = None, None
-    for img, landmark_gt, attribute_gt, euler_angle_gt in train_loader:
+    pbar = tqdm(train_loader)
+    for img, landmark_gt, attribute_gt, euler_angle_gt in pbar:
         img = img.to(device)
         attribute_gt = attribute_gt.to(device)
         landmark_gt = landmark_gt.to(device)
@@ -67,6 +70,8 @@ def train(train_loader, pfld_backbone, auxiliarynet, criterion, optimizer,
         optimizer.step()
 
         losses.update(loss.item())
+        pbar.set_description(f"loss: {losses.avg:.4f}")
+        
     return weighted_loss, loss
 
 
@@ -85,8 +90,8 @@ def validate(wlfw_val_dataloader, pfld_backbone, auxiliarynet, criterion):
             _, landmark = pfld_backbone(img)
             loss = torch.mean(torch.sum((landmark_gt - landmark)**2, axis=1))
             losses.append(loss.cpu().numpy())
-    print("===> Evaluate:")
-    print('Eval set: Average loss: {:.4f} '.format(np.mean(losses)))
+    tqdm.write("===> Evaluate:")
+    tqdm.write('Eval set: Average loss: {:.4f} '.format(np.mean(losses)))
     return np.mean(losses)
 
 
@@ -171,10 +176,8 @@ def main(args):
 def parse_args():
     parser = argparse.ArgumentParser(description='pfld')
     # general
-    parser.add_argument('-j', '--workers', default=0, type=int)
-    parser.add_argument('--devices_id', default='0', type=str)  #TBD
-    parser.add_argument('--test_initial', default='false', type=str2bool)  #TBD
-
+    parser.add_argument('-j', '--workers', default=16, type=int)
+    
     # training
     ##  -- optimizer
     parser.add_argument('--base_lr', default=0.0001, type=int)

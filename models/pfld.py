@@ -12,6 +12,17 @@ import torch
 import torch.nn as nn
 import math
 
+def _make_backbone():
+    from tinynas.nn.networks import ProxylessNASNets
+    import json
+    json_file = "../pretrained/proxyless-w0.3-r176_imagenet.json"
+    with open(json_file) as f:
+        config = json.load(f)
+    _model = ProxylessNASNets.build_from_config(config)
+    ckpt = torch.load("../pretrained/proxyless-w0.3-r176_imagenet.pth")
+    _model.load_state_dict(ckpt['state_dict'])
+    return _model
+
 
 def conv_bn(inp, oup, kernel, stride, padding=1):
     return nn.Sequential(
@@ -50,6 +61,47 @@ class InvertedResidual(nn.Module):
         else:
             return self.conv(x)
 
+
+
+class MyPFLDInference(nn.Module):
+    def __init__(self):
+        super(MyPFLDInference, self).__init__()
+        self.backbone = _make_backbone()
+        self.avg_pool1 = nn.AvgPool2d(14)
+        self.avg_pool2 = nn.AvgPool2d(7)
+        self.fc = nn.Linear(176, 196)
+
+    def forward(self, x):  # x: 3, 112, 112
+        x = self.relu(self.bn1(self.conv1(x)))  # [64, 56, 56]
+        x = self.relu(self.bn2(self.conv2(x)))  # [64, 56, 56]
+        x = self.conv3_1(x)
+        x = self.block3_2(x)
+        x = self.block3_3(x)
+        x = self.block3_4(x)
+        out1 = self.block3_5(x)
+
+        x = self.conv4_1(out1)
+        x = self.conv5_1(x)
+        x = self.block5_2(x)
+        x = self.block5_3(x)
+        x = self.block5_4(x)
+        x = self.block5_5(x)
+        x = self.block5_6(x)
+        x = self.conv6_1(x)
+        x1 = self.avg_pool1(x)
+        x1 = x1.view(x1.size(0), -1)
+
+        x = self.conv7(x)
+        x2 = self.avg_pool2(x)
+        x2 = x2.view(x2.size(0), -1)
+
+        x3 = self.relu(self.conv8(x))
+        x3 = x3.view(x3.size(0), -1)
+
+        multi_scale = torch.cat([x1, x2, x3], 1)
+        landmarks = self.fc(multi_scale)
+
+        return out1, landmarks
 
 class PFLDInference(nn.Module):
     def __init__(self):
