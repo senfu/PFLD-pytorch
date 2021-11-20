@@ -15,12 +15,12 @@ import math
 def _make_backbone():
     from tinynas.nn.networks import ProxylessNASNets
     import json
-    json_file = "../pretrained/proxyless-w0.3-r176_imagenet.json"
+    json_file = "pretrained/proxyless-w0.3-r176_imagenet.json"
     with open(json_file) as f:
         config = json.load(f)
     _model = ProxylessNASNets.build_from_config(config)
-    ckpt = torch.load("../pretrained/proxyless-w0.3-r176_imagenet.pth")
-    _model.load_state_dict(ckpt['state_dict'])
+    ckpt = torch.load("pretrained/proxyless-w0.3-r176_imagenet.pth")
+    _model.load_state_dict(ckpt['state_dict'], strict=False)
     return _model
 
 
@@ -64,44 +64,40 @@ class InvertedResidual(nn.Module):
 
 
 class MyPFLDInference(nn.Module):
+    
+    def x1_hook(self, module, input, output):
+        self.x1 = output
+    
+    def x2_hook(self, module, input, output):
+        self.x2 = output
+    
+    def out1_hook(self, module, input, output):
+        self.out1 = output
+        
     def __init__(self):
         super(MyPFLDInference, self).__init__()
         self.backbone = _make_backbone()
+        
+        self.backbone.blocks[4].register_forward_hook(self.out1_hook)
+        self.backbone.blocks[8].register_forward_hook(self.x1_hook)
+        self.backbone.blocks[16].register_forward_hook(self.x2_hook)
+        
         self.avg_pool1 = nn.AvgPool2d(14)
         self.avg_pool2 = nn.AvgPool2d(7)
-        self.fc = nn.Linear(176, 196)
+        self.fc = nn.Linear(432, 196)
 
     def forward(self, x):  # x: 3, 112, 112
-        x = self.relu(self.bn1(self.conv1(x)))  # [64, 56, 56]
-        x = self.relu(self.bn2(self.conv2(x)))  # [64, 56, 56]
-        x = self.conv3_1(x)
-        x = self.block3_2(x)
-        x = self.block3_3(x)
-        x = self.block3_4(x)
-        out1 = self.block3_5(x)
-
-        x = self.conv4_1(out1)
-        x = self.conv5_1(x)
-        x = self.block5_2(x)
-        x = self.block5_3(x)
-        x = self.block5_4(x)
-        x = self.block5_5(x)
-        x = self.block5_6(x)
-        x = self.conv6_1(x)
-        x1 = self.avg_pool1(x)
+        x3 = self.backbone(x)
+        x1 = self.avg_pool1(self.x1)
+        x2 = self.avg_pool2(self.x2)
+        
         x1 = x1.view(x1.size(0), -1)
-
-        x = self.conv7(x)
-        x2 = self.avg_pool2(x)
         x2 = x2.view(x2.size(0), -1)
-
-        x3 = self.relu(self.conv8(x))
         x3 = x3.view(x3.size(0), -1)
-
+        
         multi_scale = torch.cat([x1, x2, x3], 1)
         landmarks = self.fc(multi_scale)
-
-        return out1, landmarks
+        return self.out1, landmarks
 
 class PFLDInference(nn.Module):
     def __init__(self):
@@ -187,7 +183,7 @@ class PFLDInference(nn.Module):
 class AuxiliaryNet(nn.Module):
     def __init__(self):
         super(AuxiliaryNet, self).__init__()
-        self.conv1 = conv_bn(64, 128, 3, 2)
+        self.conv1 = conv_bn(16, 128, 3, 2)
         self.conv2 = conv_bn(128, 128, 3, 1)
         self.conv3 = conv_bn(128, 32, 3, 2)
         self.conv4 = conv_bn(32, 128, 7, 1)
@@ -208,12 +204,16 @@ class AuxiliaryNet(nn.Module):
         return x
 
 
-# if __name__ == '__main__':
-#     input = torch.randn(1, 3, 112, 112)
-#     pfld_backbone = PFLDInference()
-#     auxiliarynet = AuxiliaryNet()
-#     features, landmarks = pfld_backbone(input)
-#     angle = auxiliarynet(features)
+if __name__ == '__main__':
+    input = torch.randn(1, 3, 112, 112)
+    pfld_backbone = MyPFLDInference()
+    auxiliarynet = AuxiliaryNet()
+    features, landmarks = pfld_backbone(input)
+    angle = auxiliarynet(features)
 
-#     print("angle.shape:{0:}, landmarks.shape: {1:}".format(
-#         angle.shape, landmarks.shape))
+    print("angle.shape:{0:}, landmarks.shape: {1:}".format(
+        angle.shape, landmarks.shape))
+
+    from thop import profile
+    macs, param = profile(pfld_backbone, inputs=(input, ))
+    print(macs/1000000, param/1000000)
