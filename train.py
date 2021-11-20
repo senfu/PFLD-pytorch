@@ -55,8 +55,8 @@ def train(train_loader, pfld_backbone, auxiliarynet, criterion, optimizer,
         attribute_gt = attribute_gt.to(device)
         landmark_gt = landmark_gt.to(device)
         euler_angle_gt = euler_angle_gt.to(device)
-        pfld_backbone = pfld_backbone.to(device)
-        auxiliarynet = auxiliarynet.to(device)
+        # pfld_backbone = pfld_backbone.to(device)
+        # auxiliarynet = auxiliarynet.to(device)
         features, landmarks = pfld_backbone(img)
         angle = auxiliarynet(features)
         weighted_loss, loss = criterion(attribute_gt, landmark_gt,
@@ -80,8 +80,8 @@ def validate(wlfw_val_dataloader, pfld_backbone, auxiliarynet, criterion):
             attribute_gt = attribute_gt.to(device)
             landmark_gt = landmark_gt.to(device)
             euler_angle_gt = euler_angle_gt.to(device)
-            pfld_backbone = pfld_backbone.to(device)
-            auxiliarynet = auxiliarynet.to(device)
+            # pfld_backbone = pfld_backbone.to(device)
+            # auxiliarynet = auxiliarynet.to(device)
             _, landmark = pfld_backbone(img)
             loss = torch.mean(torch.sum((landmark_gt - landmark)**2, axis=1))
             losses.append(loss.cpu().numpy())
@@ -105,6 +105,10 @@ def main(args):
     # Step 2: model, criterion, optimizer, scheduler
     pfld_backbone = PFLDInference().to(device)
     auxiliarynet = AuxiliaryNet().to(device)
+    pfld_backbone = torch.nn.DataParallel(pfld_backbone)
+    auxiliarynet = torch.nn.DataParallel(auxiliarynet)
+    
+    
     criterion = PFLDLoss()
     optimizer = torch.optim.Adam([{
         'params': pfld_backbone.parameters()
