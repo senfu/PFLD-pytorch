@@ -110,9 +110,6 @@ def main(args):
     # Step 2: model, criterion, optimizer, scheduler
     pfld_backbone = PFLDInference().to(device)
     auxiliarynet = AuxiliaryNet().to(device)
-    pfld_backbone = torch.nn.DataParallel(pfld_backbone)
-    auxiliarynet = torch.nn.DataParallel(auxiliarynet)
-    
     
     criterion = PFLDLoss()
     optimizer = torch.optim.Adam([{
