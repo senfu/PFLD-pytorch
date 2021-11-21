@@ -7,6 +7,9 @@ data/WFLW/
 data/test_data/
 data/train_data/
 
+checkpoint/
+
+
 # C extensions
 *.so
 
