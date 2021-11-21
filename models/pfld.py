@@ -183,7 +183,7 @@ class PFLDInference(nn.Module):
 class AuxiliaryNet(nn.Module):
     def __init__(self):
         super(AuxiliaryNet, self).__init__()
-        self.conv1 = conv_bn(16, 128, 3, 2)
+        self.conv1 = conv_bn(64, 128, 3, 2)
         self.conv2 = conv_bn(128, 128, 3, 1)
         self.conv3 = conv_bn(128, 32, 3, 2)
         self.conv4 = conv_bn(32, 128, 7, 1)
