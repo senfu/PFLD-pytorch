@@ -123,11 +123,11 @@ def validate(wlfw_val_dataloader, pfld_backbone):
 
 def main(args):
     checkpoint = torch.load(args.model_path, map_location=device)
-    if ".module" in list(checkpoint['pfld_backbone'].keys())[0]:
+    if "module." in list(checkpoint['pfld_backbone'].keys())[0]:
         from copy import deepcopy
         _checkpoint = {}
         for key in checkpoint['pfld_backbone'].keys():
-            _checkpoint[key.replace(".module", "")] = deepcopy(checkpoint['pfld_backbone'][key])
+            _checkpoint[key.replace("module.", "")] = deepcopy(checkpoint['pfld_backbone'][key])
         checkpoint['pfld_backbone'] = _checkpoint
         
     pfld_backbone = PFLDInference().to(device)
