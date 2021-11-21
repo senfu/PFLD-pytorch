@@ -18,6 +18,7 @@ import torch.backends.cudnn as cudnn
 from dataset.datasets import WLFWDatasets
 
 from models.pfld import PFLDInference
+from tqdm import tqdm
 
 cudnn.benchmark = True
 cudnn.determinstic = True
@@ -73,7 +74,7 @@ def validate(wlfw_val_dataloader, pfld_backbone):
     nme_list = []
     cost_time = []
     with torch.no_grad():
-        for img, landmark_gt, _, _ in wlfw_val_dataloader:
+        for img, landmark_gt, _, _ in tqdm(wlfw_val_dataloader):
             img = img.to(device)
             landmark_gt = landmark_gt.to(device)
             pfld_backbone = pfld_backbone.to(device)
@@ -122,6 +123,13 @@ def validate(wlfw_val_dataloader, pfld_backbone):
 
 def main(args):
     checkpoint = torch.load(args.model_path, map_location=device)
+    if ".module" in list(checkpoint['pfld_backbone'].keys())[0]:
+        from copy import deepcopy
+        _checkpoint = {}
+        for key in checkpoint['pfld_backbone'].keys():
+            _checkpoint[key.replace(".module", "")] = deepcopy(checkpoint['pfld_backbone'][key])
+        checkpoint['pfld_backbone'] = _checkpoint
+        
     pfld_backbone = PFLDInference().to(device)
     pfld_backbone.load_state_dict(checkpoint['pfld_backbone'])
 
